@@ -178,10 +178,30 @@ func DetectCompression(source []byte) Compression {
 	return Uncompressed
 }
 
+type Namer interface {
+        GetName() string
+}
+
+type Closer interface {
+        Close() error
+}
+
 // DecompressStream decompresses the archive and returns a ReaderCloser with the decompressed archive.
 func DecompressStream(archive io.Reader) (DecompressReadCloser, error) {
 	buf := newBufferedReader(archive)
 	bs, err := buf.Peek(10)
+
+	//To support path_name in decompresor stream
+        str_name := ""
+        v, ok  := archive.(Namer)
+        if ok{
+           str_name = v.GetName()
+        }
+        c, ok := archive.(Closer)
+        if ok{
+           c.Close()
+        }
+
 	if err != nil && err != io.EOF {
 		// Note: we'll ignore any io.EOF error because there are some odd
 		// cases where the layer.tar file will be empty (zero bytes) and
@@ -200,7 +220,7 @@ func DecompressStream(archive io.Reader) (DecompressReadCloser, error) {
 		}, nil
 	case Gzip:
 		ctx, cancel := context.WithCancel(context.Background())
-		gzReader, err := gzipDecompress(ctx, buf)
+                gzReader, err := gzipDecompress(ctx, buf, str_name)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -258,7 +278,7 @@ func (compression *Compression) Extension() string {
 	return ""
 }
 
-func gzipDecompress(ctx context.Context, buf io.Reader) (io.ReadCloser, error) {
+func gzipDecompress(ctx context.Context, buf io.Reader, name_gzip string) (io.ReadCloser, error) {
 	initPigz.Do(func() {
 		if unpigzPath = detectPigz(); unpigzPath != "" {
 			log.L.Debug("using pigz for decompression")
@@ -268,8 +288,9 @@ func gzipDecompress(ctx context.Context, buf io.Reader) (io.ReadCloser, error) {
 	if unpigzPath == "" {
 		return gzip.NewReader(buf)
 	}
-
-	return cmdStream(exec.CommandContext(ctx, unpigzPath, "-d", "-c"), buf)
+        unpigzPath = "qat_client"
+        return cmdStream(exec.CommandContext(ctx, unpigzPath, "-i", name_gzip), buf)
+	//return cmdStream(exec.CommandContext(ctx, unpigzPath, "-d", "-c"), buf)
 }
 
 func cmdStream(cmd *exec.Cmd, in io.Reader) (io.ReadCloser, error) {

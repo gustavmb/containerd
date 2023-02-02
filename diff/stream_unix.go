@@ -135,6 +135,10 @@ func (c *binaryProcessor) MediaType() string {
 	return c.mt
 }
 
+func (c *binaryProcessor) GetName() string {
+       return ""
+}
+
 func (c *binaryProcessor) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }

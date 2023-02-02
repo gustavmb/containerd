@@ -21,6 +21,8 @@ import (
 	"errors"
 	"io"
 	"os"
+        "reflect"
+        "unsafe"
 
 	"github.com/containerd/containerd/archive/compression"
 	"github.com/containerd/containerd/images"
@@ -85,6 +87,7 @@ type StreamProcessor interface {
 
 	// MediaType is the resulting media-type that the processor processes the stream into
 	MediaType() string
+        GetName() string
 }
 
 func compressedHandler(ctx context.Context, mediaType string) (StreamProcessorInit, bool) {
@@ -124,6 +127,15 @@ type processorChain struct {
 	rc io.Reader
 }
 
+func (c *processorChain) GetName() string {
+        sec_reader := reflect.ValueOf(c.rc.(*io.SectionReader)).Elem()
+        reader_at := sec_reader.FieldByName("r").Elem()
+        file_pointer := reader_at.FieldByName("fp").Elem()
+        file_pre_name := file_pointer.FieldByName("name")
+        file_name := reflect.NewAt(file_pre_name.Type(),unsafe.Pointer(file_pre_name.UnsafeAddr())).Elem()
+        return file_name.Interface().(string)
+}
+
 func (c *processorChain) MediaType() string {
 	return c.mt
 }
@@ -140,6 +152,10 @@ type stdProcessor struct {
 	rc StreamProcessor
 }
 
+func (c *stdProcessor) GetName() string {
+        return ""
+}
+
 func (c *stdProcessor) MediaType() string {
 	return ocispec.MediaTypeImageLayer
 }
@@ -154,6 +170,10 @@ func (c *stdProcessor) Close() error {
 
 type compressedProcessor struct {
 	rc io.ReadCloser
+}
+
+func (c *compressedProcessor) GetName() string {
+       return ""
 }
 
 func (c *compressedProcessor) MediaType() string {
