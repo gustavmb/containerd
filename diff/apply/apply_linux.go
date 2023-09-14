@@ -21,6 +21,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"archive/tar"
+    "path/filepath"
+	"os"
+	"sync"
+
 
 	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/errdefs"
@@ -28,7 +33,90 @@ import (
 	"github.com/containerd/containerd/pkg/userns"
 )
 
+//Add Untar
+var bufPool = &sync.Pool{
+    New: func() interface{} {
+        buffer := make([]byte, 32*1024)
+        return &buffer
+    },
+}
+
+func Untar(dst string, r io.Reader) error {
+
+    tr := tar.NewReader(r)
+
+    for {
+        header, err := tr.Next()
+
+        switch {
+
+        // if no more files are found return
+        case err == io.EOF:
+            return nil
+
+        // return any other error
+        case err != nil:
+            return err
+
+        // if the header is nil, just skip it (not sure how this happens)
+        case header == nil:
+            continue
+        }
+
+        // the target location where the dir/file should be created
+        target := filepath.Join(dst, header.Name)
+
+        // the following switch could also be done using fi.Mode(), not sure if there
+        // a benefit of using one vs. the other.
+        // fi := header.FileInfo()
+
+        // check the file type
+        switch header.Typeflag {
+
+        // if its a dir and it doesn't exist create it
+        case tar.TypeDir:
+            if _, err := os.Stat(target); err != nil {
+                if err := os.MkdirAll(target, 0755); err != nil {
+                    return err
+                }
+            }
+
+        // if it's a file create it
+        case tar.TypeReg:
+            f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+            if err != nil {
+                return err
+            }
+
+            // copy over contents
+            //if _, err := io.Copy(f, tr); err != nil {
+            //    return err
+            //}
+            buf := bufPool.Get().(*[]byte)
+            defer bufPool.Put(buf)
+            //buf := make([]byte, 32*1024)
+            for {
+                nr, err := r.Read(*buf)
+                if err == io.EOF {
+                  break
+                }
+                if nr > 0 {
+                    //_, _= f.Write(buf[:nr])
+                    _, _= f.Write((*buf)[0:nr])
+
+                }
+            }
+            // manually close here after each file operation; defering would cause each file close
+            // to wait until all operations have completed.
+            f.Close()
+        }
+    }
+}
+
+//End Untar
+
 func apply(ctx context.Context, mounts []mount.Mount, r io.Reader) error {
+    fmt.Println("I got into apply under apply_linux.go")
 	switch {
 	case len(mounts) == 1 && mounts[0].Type == "overlay":
 		// OverlayConvertWhiteout (mknod c 0 0) doesn't work in userns.
@@ -49,8 +137,18 @@ func apply(ctx context.Context, mounts []mount.Mount, r io.Reader) error {
 		if len(parents) > 0 {
 			opts = append(opts, archive.WithParents(parents))
 		}
-		_, err = archive.Apply(ctx, path, r, opts...)
-		return err
+		//fmt.Println("ARCHIVE OPTS PATH: ", path)
+		
+		//var wg sync.WaitGroup
+		//wg.Add(1)
+		//go func() {
+			Untar(path, r)
+			//wg.Done()
+		//}()
+		//_ , err = archive.Apply(ctx, path, r, opts...)
+
+		
+		return nil
 	case len(mounts) == 1 && mounts[0].Type == "aufs":
 		path, parents, err := getAufsPath(mounts[0].Options)
 		if err != nil {

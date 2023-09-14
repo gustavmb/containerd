@@ -191,7 +191,7 @@ can be used and modified as necessary as a custom configuration.`
 		chsrv := make(chan srvResp)
 		go func() {
 			defer close(chsrv)
-
+            fmt.Println("SERVER NEW")
 			server, err := server.New(ctx, config)
 			if err != nil {
 				select {

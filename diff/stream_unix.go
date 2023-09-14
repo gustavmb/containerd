@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"sync"
+    "time"
 
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/protobuf/proto"
@@ -35,6 +36,10 @@ import (
 
 // NewBinaryProcessor returns a binary processor for use with processing content streams
 func NewBinaryProcessor(ctx context.Context, imt, rmt string, stream StreamProcessor, name string, args, env []string, payload typeurl.Any) (StreamProcessor, error) {
+    t1 := time.Now()
+    defer func() {
+            fmt.Println("NewBinaryProcessor: ", time.Since(t1))
+    }()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, env...)
@@ -125,6 +130,10 @@ func (c *binaryProcessor) Err() error {
 }
 
 func (c *binaryProcessor) wait() {
+    t1 := time.Now()
+    defer func() {
+            fmt.Println("Time wait: ", time.Since(t1))
+    }()
 	if err := c.cmd.Wait(); err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
 			c.mu.Lock()

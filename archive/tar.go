@@ -173,6 +173,7 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 	)
 
 	if convertWhiteout == nil {
+		fmt.Println("Fall in Convert whiteout")
 		// handle whiteouts by removing the target files
 		convertWhiteout = func(hdr *tar.Header, path string) (bool, error) {
 			base := filepath.Base(path)
@@ -211,9 +212,12 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 			return true, nil
 		}
 	}
-
+    t1 := time.Now()
+    var general time.Duration
+    t2_internal := time.Now()
 	// Iterate through the files in the archive.
 	for {
+
 		select {
 		case <-ctx.Done():
 			return 0, ctx.Err()
@@ -254,6 +258,7 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 			return 0, fmt.Errorf("failed to get root path: %w", err)
 		}
 
+
 		// Join to root before joining to parent path to ensure relative links are
 		// already resolved based on the root before adding to parent.
 		path := filepath.Join(ppath, filepath.Join("/", base))
@@ -273,7 +278,6 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 				return 0, err
 			}
 		}
-
 		// Naive whiteout convert function which handles whiteout files by
 		// removing the target files.
 		if err := validateWhiteout(path); err != nil {
@@ -300,10 +304,11 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 
 		srcData := io.Reader(tr)
 		srcHdr := hdr
-
+        t2_internal = time.Now()
 		if err := createTarFile(ctx, path, root, srcHdr, srcData, options.NoSameOwner); err != nil {
 			return 0, err
 		}
+        general += time.Since(t2_internal)
 
 		// Directory mtimes must be handled at the end to avoid further
 		// file creation in them to modify the directory mtime
@@ -312,6 +317,8 @@ func applyNaive(ctx context.Context, root string, r io.Reader, options ApplyOpti
 		}
 		unpackedPaths[path] = struct{}{}
 	}
+    fmt.Println("Time naive for tar function: ", time.Since(t1))
+    fmt.Println("Time spent in createTarFile: ", general)
 
 	for _, hdr := range dirs {
 		path, err := fs.RootPath(root, hdr.Name)
@@ -344,12 +351,27 @@ func createTarFile(ctx context.Context, path, extractDir string, hdr *tar.Header
 
 	//nolint:staticcheck // TypeRegA is deprecated but we may still receive an external tar with TypeRegA
 	case tar.TypeReg, tar.TypeRegA:
-		file, err := openFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, hdrInfo.Mode())
+		//file, err := openFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, hdrInfo.Mode())
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, os.FileMode(hdrInfo.Mode()))
 		if err != nil {
 			return err
 		}
-
 		_, err = copyBuffered(ctx, file, reader)
+		/*HACK
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+		
+		for {
+			nr, err := reader.Read(*buf)
+			if err == io.EOF {
+			  break
+			}
+			if nr > 0 {
+				_, _= file.Write((*buf)[0:nr])
+
+			}
+		}*/
+
 		if err1 := file.Close(); err == nil {
 			err = err1
 		}
@@ -747,10 +769,21 @@ func copyBuffered(ctx context.Context, dst io.Writer, src io.Reader) (written in
 			return
 		default:
 		}
-
+        //start := time.Now()
 		nr, er := src.Read(*buf)
+        //duration := time.Since(start)
+        //f, _ := os.OpenFile("/tmp/ctr_layer_read_tar", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+        //s := fmt.Sprintf("%f",duration.Seconds())
+        //_, _ = f.WriteString(s+"\n")
+        //f.Close()
 		if nr > 0 {
+            //start := time.Now()
 			nw, ew := dst.Write((*buf)[0:nr])
+            //duration := time.Since(start)
+            //f, _ := os.OpenFile("/tmp/ctr_layer_write_tar", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+            //s := fmt.Sprintf("%f",duration.Seconds())
+            //_, _ = f.WriteString(s+"\n")
+            //f.Close()
 			if nw > 0 {
 				written += int64(nw)
 			}

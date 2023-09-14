@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+    "time"
+    "os"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/diff"
@@ -380,12 +382,17 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string, opts ...Unpa
 			return err
 		}
 	}
-
 	for _, layer := range layers {
+        start := time.Now()
 		unpacked, err = rootfs.ApplyLayerWithOpts(ctx, layer, chain, sn, a, config.SnapshotOpts, config.ApplyOpts)
 		if err != nil {
 			return err
 		}
+        duration := time.Since(start)
+        f, _ := os.OpenFile("/tmp/ctr_layer_duration", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+        s := fmt.Sprintf("%f",duration.Seconds())
+        _, _ = f.WriteString(s+"\n")
+        f.Close()
 
 		if unpacked {
 			// Set the uncompressed label after the uncompressed

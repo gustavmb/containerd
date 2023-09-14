@@ -268,7 +268,6 @@ func gzipDecompress(ctx context.Context, buf io.Reader) (io.ReadCloser, error) {
 	if unpigzPath == "" {
 		return gzip.NewReader(buf)
 	}
-
 	return cmdStream(exec.CommandContext(ctx, unpigzPath, "-d", "-c"), buf)
 }
 

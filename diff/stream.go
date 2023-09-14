@@ -21,6 +21,8 @@ import (
 	"errors"
 	"io"
 	"os"
+    "fmt"
+    "reflect"
 
 	"github.com/containerd/containerd/archive/compression"
 	"github.com/containerd/containerd/images"
@@ -48,8 +50,11 @@ func RegisterProcessor(handler Handler) {
 // GetProcessor returns the processor for a media-type
 func GetProcessor(ctx context.Context, stream StreamProcessor, payloads map[string]typeurl.Any) (StreamProcessor, error) {
 	// reverse this list so that user configured handlers come up first
+    //fmt.Println("Get Processor: ", reflect.TypeOf(handlers[3]))
+    fmt.Println("Get Processor: ", reflect.TypeOf(handlers))
 	for i := len(handlers) - 1; i >= 0; i-- {
 		processor, ok := handlers[i](ctx, stream.MediaType())
+        fmt.Println("Get Looped Processor(", i ,"): ", reflect.TypeOf(processor))
 		if ok {
 			return processor(ctx, stream, payloads)
 		}
@@ -88,6 +93,7 @@ type StreamProcessor interface {
 }
 
 func compressedHandler(ctx context.Context, mediaType string) (StreamProcessorInit, bool) {
+    fmt.Println("Compressed Handler")
 	compressed, err := images.DiffCompression(ctx, mediaType)
 	if err != nil {
 		return nil, false

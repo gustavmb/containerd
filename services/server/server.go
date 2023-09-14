@@ -116,7 +116,7 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 	for id, p := range config.StreamProcessors {
 		diff.RegisterProcessor(diff.BinaryHandler(id, p.Returns, p.Accepts, p.Path, p.Args, p.Env))
 	}
-
+    fmt.Println("Register Processor Done")
 	serverOpts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			otelgrpc.StreamServerInterceptor(),
